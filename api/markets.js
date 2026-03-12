@@ -1,55 +1,50 @@
 export default async function handler(req, res) {
-
   const API_KEY = process.env.TWELVE_KEY;
   const BASE = "https://api.twelvedata.com";
 
   async function fetchTwelve(symbol) {
-    const r = await fetch(`${BASE}/price?symbol=${symbol}&apikey=${API_KEY}`);
+    const r = await fetch(`${BASE}/price?symbol=${encodeURIComponent(symbol)}&apikey=${API_KEY}`);
     const j = await r.json();
-    return Number(j.price);
+    return {
+      symbol,
+      raw: j,
+      price: Number(j.price ?? null)
+    };
   }
 
   async function fetchStooq(symbol) {
-    const r = await fetch(`https://stooq.com/q/l/?s=${symbol}&i=1`);
+    const r = await fetch(`https://stooq.com/q/l/?s=${encodeURIComponent(symbol)}&i=1`);
     const text = await r.text();
-
     const parts = text.split(",");
     const price = Number(parts[3]);
 
-    return price;
+    return {
+      symbol,
+      raw: text,
+      parsed: parts,
+      price: Number.isFinite(price) ? price : null
+    };
   }
 
   try {
-
-    const [usd_jpy, sp500, nikkei, topix] = await Promise.all([
-
+    const [usd_jpy, sp500, nikkei_test, topix_test] = await Promise.all([
       fetchTwelve("USD/JPY"),
       fetchTwelve("SPY"),
-
       fetchStooq("^nkx"),
       fetchStooq("^topx")
-
     ]);
 
-    res.status(200).json({
-
-      usd_jpy: usd_jpy,
-      sp500: sp500,
-      nikkei: nikkei,
-      topix: topix,
-
-      updated_at: new Date().toISOString(),
-      source: "mixed"
-
+    return res.status(200).json({
+      usd_jpy,
+      sp500,
+      nikkei_test,
+      topix_test,
+      updated_at: new Date().toISOString()
     });
-
   } catch (e) {
-
-    res.status(500).json({
+    return res.status(500).json({
       error: "market fetch failed",
-      detail: e.toString()
+      detail: String(e)
     });
-
   }
-
 }
